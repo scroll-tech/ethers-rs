@@ -206,6 +206,16 @@ impl Transaction {
                 rlp_opt(&mut rlp, &self.is_system_tx);
                 rlp.append(&self.input.as_ref());
             }
+            // L1 Message
+            #[cfg(feature = "scroll")]
+            Some(x) if x == U64::from(0x7E) => {
+                rlp.append(&self.nonce);
+                rlp.append(&self.gas);
+                rlp_opt(&mut rlp, &self.to);
+                rlp.append(&self.value);
+                rlp.append(&self.input.as_ref());
+                rlp.append(&self.from);
+            }
             // Legacy (0x00)
             _ => {
                 rlp.append(&self.nonce);
@@ -241,6 +251,12 @@ impl Transaction {
             }
             #[cfg(feature = "optimism")]
             Some(x) if x == U64::from(0x7E) => {
+                encoded.extend_from_slice(&[0x7E]);
+                encoded.extend_from_slice(rlp_bytes.as_ref());
+                encoded.into()
+            }
+            #[cfg(feature = "scroll")]
+            Some(x) if x == U64::from(0x7e) => {
                 encoded.extend_from_slice(&[0x7E]);
                 encoded.extend_from_slice(rlp_bytes.as_ref());
                 encoded.into()
@@ -327,6 +343,30 @@ impl Transaction {
         Ok(())
     }
 
+    /// Decodes fields of the type 0x7E transaction response starting at the RLP offset passed.
+    /// Increments the offset for each element parsed
+    /// https://github.com/scroll-tech/go-ethereum/blob/b2948719ffac5e66882990b8bfee35e522d9d5f2/core/types/l1_message_tx.go#L10-L17
+    fn decode_base_l1_msg(
+        &mut self,
+        rlp: &rlp::Rlp,
+        offset: &mut usize,
+    ) -> Result<(), DecoderError> {
+        self.nonce = rlp.val_at(*offset)?;
+        *offset += 1;
+        self.gas = rlp.val_at(*offset)?;
+        *offset += 1;
+        self.to = Some(rlp.val_at(*offset)?);
+        *offset += 1;
+        self.value = rlp.val_at(*offset)?;
+        *offset += 1;
+        let input = rlp::Rlp::new(rlp.at(*offset)?.as_raw()).data()?;
+        self.input = Bytes::from(input.to_vec());
+        *offset += 1;
+        self.from = rlp.val_at(*offset)?;
+        *offset += 1;
+        Ok(())
+    }
+
     /// Decodes a legacy transaction starting at the RLP offset passed.
     /// Increments the offset for each element parsed.
     #[inline]
@@ -409,9 +449,18 @@ impl Decodable for Transaction {
                     txn.decode_base_eip1559(&rest, &mut offset)?;
                     txn.transaction_type = Some(2u64.into());
                 }
+                #[cfg(feature = "scroll")]
+                0x7E => {
+                    txn.decode_base_l1_msg(&rest, &mut offset)?;
+                    txn.transaction_type = Some(126u64.into())
+                }
                 _ => return Err(DecoderError::Custom("invalid tx type")),
             }
-
+            #[cfg(feature = "scroll")]
+            if first == 0x7E {
+                // L1 msg does not have signature
+                return Ok(txn)
+            }
             let odd_y_parity: bool = rest.val_at(offset)?;
             txn.v = (odd_y_parity as u8).into();
             txn.r = rest.val_at(offset + 1)?;
@@ -874,6 +923,47 @@ mod tests {
         let decoded_transaction = Transaction::decode(&rlp::Rlp::new(&rlp_bytes)).unwrap();
 
         assert_eq!(decoded_transaction.hash(), tx.hash());
+    }
+
+    #[cfg(feature = "scroll")]
+    #[test]
+    fn encode_rlp_l1_message() {
+        let tx = Transaction {
+            block_hash: None,
+            block_number: None,
+            from: Address::from_str("478cdd110520a8e733e2acf9e543d2c687ea5239").unwrap(),
+            gas: U256::from(24000),
+            gas_price: None,
+            hash: H256::from_str("7240660ca38dae0bf350c32799c811cf46dacf64693f3bc010e1c27d0b2d3668").unwrap(),
+            input: Bytes::from(
+                hex::decode("8ef1332e000000000000000000000000ea08a65b1829af779261e768d609e59279b510f2000000000000000000000000f2ec6b6206f6208e8f9b394efc1a01c1cbde77750000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000b00000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000a4232e87480000000000000000000000002b5ad5c4795c026514f8317c7a215e218dccd6cf0000000000000000000000002b5ad5c4795c026514f8317c7a215e218dccd6cf00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap()
+            ),
+            nonce: U256::from(11),
+            to: Some(Address::from_str("1a258d17bf244c4df02d40343a7626a9d321e105").unwrap()),
+            transaction_index: None,
+            value: U256::zero(),
+            transaction_type: Some(U64::from(0x7e)),
+            v: U64::zero(),
+            r: U256::zero(),
+            s: U256::zero(),
+            chain_id: None,
+            access_list: None,
+            max_fee_per_gas: None,
+            max_priority_fee_per_gas: None,
+            other: Default::default(),
+        };
+
+        assert_eq!(tx.hash(), tx.hash);
+
+        let rlp_bytes = tx.rlp().to_vec();
+        let decoded_tx = Transaction::decode(&rlp::Rlp::new(&rlp_bytes)).unwrap();
+
+        assert_eq!(tx.nonce, decoded_tx.nonce);
+        assert_eq!(tx.gas, decoded_tx.gas);
+        assert_eq!(tx.to, decoded_tx.to);
+        assert_eq!(tx.value, decoded_tx.value);
+        assert_eq!(tx.input, decoded_tx.input);
+        assert_eq!(tx.from, decoded_tx.from);
     }
 
     // <https://etherscan.io/tx/0x929ff27a5c7833953df23103c4eb55ebdfb698678139d751c51932163877fada>
