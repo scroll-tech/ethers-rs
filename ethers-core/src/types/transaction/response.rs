@@ -206,6 +206,16 @@ impl Transaction {
                 rlp_opt(&mut rlp, &self.is_system_tx);
                 rlp.append(&self.input.as_ref());
             }
+            // L1 Block Hashes
+            #[cfg(feature = "scroll")]
+            Some(x) if x == U64::from(0x7D) => {
+                rlp.append(&self.nonce);
+                rlp.append(&self.gas);
+                rlp_opt(&mut rlp, &self.to);
+                rlp.append(&self.value);
+                rlp.append(&self.input.as_ref());
+                rlp.append(&self.from);
+            }
             // L1 Message
             #[cfg(feature = "scroll")]
             Some(x) if x == U64::from(0x7E) => {
@@ -256,11 +266,17 @@ impl Transaction {
                 encoded.into()
             }
             #[cfg(feature = "scroll")]
+            Some(x) if x == U64::from(0x7d) => {
+                encoded.extend_from_slice(&[0x7D]);
+                encoded.extend_from_slice(rlp_bytes.as_ref());
+                encoded.into()
+            }
+            #[cfg(feature = "scroll")]
             Some(x) if x == U64::from(0x7e) => {
                 encoded.extend_from_slice(&[0x7E]);
                 encoded.extend_from_slice(rlp_bytes.as_ref());
                 encoded.into()
-            }
+            } 
             _ => rlp_bytes,
         }
     }
@@ -342,6 +358,29 @@ impl Transaction {
 
         Ok(())
     }
+    
+    /// Decodes fields of the type 0x7D transaction response starting at the RLP offset passed.
+    /// Increments the offset for each element parsed
+    fn decode_base_l1_block_hashes(
+        &mut self,
+        rlp: &rlp::Rlp,
+        offset: &mut usize,
+    ) -> Result<(), DecoderError> {
+        self.nonce = rlp.val_at(*offset)?;
+        *offset += 1;
+        self.gas = rlp.val_at(*offset)?;
+        *offset += 1;
+        self.to = Some(rlp.val_at(*offset)?);
+        *offset += 1;
+        self.value = rlp.val_at(*offset)?;
+        *offset += 1;
+        let input = rlp::Rlp::new(rlp.at(*offset)?.as_raw()).data()?;
+        self.input = Bytes::from(input.to_vec());
+        *offset += 1;
+        self.from = rlp.val_at(*offset)?;
+        *offset += 1;
+        Ok(())
+    }
 
     /// Decodes fields of the type 0x7E transaction response starting at the RLP offset passed.
     /// Increments the offset for each element parsed
@@ -366,6 +405,7 @@ impl Transaction {
         *offset += 1;
         Ok(())
     }
+  
 
     /// Decodes a legacy transaction starting at the RLP offset passed.
     /// Increments the offset for each element parsed.
@@ -450,6 +490,11 @@ impl Decodable for Transaction {
                     txn.transaction_type = Some(2u64.into());
                 }
                 #[cfg(feature = "scroll")]
+                0x7D => {
+                    txn.decode_base_l1_block_hashes(&rest, &mut offset)?;
+                    txn.transaction_type = Some(126u64.into())
+                }
+                #[cfg(feature = "scroll")]
                 0x7E => {
                     txn.decode_base_l1_msg(&rest, &mut offset)?;
                     txn.transaction_type = Some(126u64.into())
@@ -459,6 +504,11 @@ impl Decodable for Transaction {
             #[cfg(feature = "scroll")]
             if first == 0x7E {
                 // L1 msg does not have signature
+                return Ok(txn)
+            }
+            #[cfg(feature = "scroll")]
+            if first == 0x7D {
+                // L1 block hashes does not have signature
                 return Ok(txn)
             }
             let odd_y_parity: bool = rest.val_at(offset)?;
