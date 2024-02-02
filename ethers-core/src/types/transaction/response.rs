@@ -13,6 +13,8 @@ use crate::{
 use rlp::{Decodable, DecoderError, RlpStream};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+#[cfg(feature = "scroll")]
+use std::str::FromStr;
 
 /// Details of a signed transaction
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -135,6 +137,18 @@ pub struct Transaction {
     #[cfg(not(any(feature = "celo", feature = "optimism")))]
     #[serde(flatten)]
     pub other: crate::types::OtherFields,
+
+    #[cfg(feature = "scroll")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "firstAppliedL1Block")]
+    pub first_applied_l1_block: Option<U256>,
+
+    #[cfg(feature = "scroll")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "lastAppliedL1Block")]
+    pub last_applied_l1_block: Option<U256>,
+
+    #[cfg(feature = "scroll")]
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "blockRangeHash")]
+    pub block_range_hash: Option<Vec<H256>>,
 }
 
 impl Transaction {
@@ -206,13 +220,18 @@ impl Transaction {
                 rlp_opt(&mut rlp, &self.is_system_tx);
                 rlp.append(&self.input.as_ref());
             }
-            // L1 Block Hashes
+             // L1 Block Hashes
             #[cfg(feature = "scroll")]
             Some(x) if x == U64::from(0x7D) => {
-                rlp.append(&self.nonce);
-                rlp.append(&self.gas);
+                rlp_opt(&mut rlp, &self.first_applied_l1_block);
+                rlp_opt(&mut rlp, &self.last_applied_l1_block);
+                if let Some(inner) = &self.block_range_hash {
+                    rlp.append_list::<H256, H256>(&inner);
+                } else {
+                    // Choice of `u8` type here is arbitrary as all empty lists are encoded the same.
+                    rlp.append_list::<H256, H256>(&[]);
+                }
                 rlp_opt(&mut rlp, &self.to);
-                rlp.append(&self.value);
                 rlp.append(&self.input.as_ref());
                 rlp.append(&self.from);
             }
@@ -361,18 +380,19 @@ impl Transaction {
     
     /// Decodes fields of the type 0x7D transaction response starting at the RLP offset passed.
     /// Increments the offset for each element parsed
+    #[cfg(feature = "scroll")]
     fn decode_base_l1_block_hashes(
         &mut self,
         rlp: &rlp::Rlp,
         offset: &mut usize,
     ) -> Result<(), DecoderError> {
-        self.nonce = rlp.val_at(*offset)?;
+        self.first_applied_l1_block = Some(rlp.val_at(*offset)?);
         *offset += 1;
-        self.gas = rlp.val_at(*offset)?;
+        self.last_applied_l1_block = Some(rlp.val_at(*offset)?);
+        *offset += 1;
+        self.block_range_hash = Some(rlp.list_at(*offset)?);
         *offset += 1;
         self.to = Some(rlp.val_at(*offset)?);
-        *offset += 1;
-        self.value = rlp.val_at(*offset)?;
         *offset += 1;
         let input = rlp::Rlp::new(rlp.at(*offset)?.as_raw()).data()?;
         self.input = Bytes::from(input.to_vec());
@@ -385,6 +405,7 @@ impl Transaction {
     /// Decodes fields of the type 0x7E transaction response starting at the RLP offset passed.
     /// Increments the offset for each element parsed
     /// https://github.com/scroll-tech/go-ethereum/blob/b2948719ffac5e66882990b8bfee35e522d9d5f2/core/types/l1_message_tx.go#L10-L17
+    #[cfg(feature = "scroll")]
     fn decode_base_l1_msg(
         &mut self,
         rlp: &rlp::Rlp,
@@ -492,7 +513,7 @@ impl Decodable for Transaction {
                 #[cfg(feature = "scroll")]
                 0x7D => {
                     txn.decode_base_l1_block_hashes(&rest, &mut offset)?;
-                    txn.transaction_type = Some(126u64.into())
+                    txn.transaction_type = Some(125u64.into())
                 }
                 #[cfg(feature = "scroll")]
                 0x7E => {
