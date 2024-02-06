@@ -106,6 +106,16 @@ pub struct Block<TX> {
     #[serde(rename = "epochSnarkData", default)]
     pub epoch_snark_data: Option<EpochSnarkData>,
 
+    ///////////////// Scroll-specific fields //////////////
+    #[cfg(feature = "scroll")]
+    #[serde(rename = "lastAppliedL1Block", default, skip_serializing_if = "Option::is_none")]
+    pub last_applied_l1_block: Option<U64>,
+
+    /// L1 block hashes
+    #[cfg(feature = "scroll")]
+    #[serde(rename = "l1BlockHashes", default, skip_serializing_if = "Option::is_none")]
+    pub l1_block_hashes: Option<Vec<H256>>,
+
     /// Captures unknown fields such as additional fields used by L2s
     #[cfg(not(feature = "celo"))]
     #[serde(flatten)]
@@ -204,7 +214,7 @@ impl<TX> Block<TX> {
 impl Block<TxHash> {
     /// Converts this block that only holds transaction hashes into a full block with `Transaction`
     pub fn into_full_block(self, transactions: Vec<Transaction>) -> Block<Transaction> {
-        #[cfg(not(feature = "celo"))]
+        #[cfg(not(any(feature = "celo", feature = "scroll")))]
         {
             let Block {
                 hash,
@@ -258,6 +268,68 @@ impl Block<TxHash> {
                 withdrawals_root,
                 withdrawals,
                 transactions,
+                other,
+            }
+        }
+
+        #[cfg(feature = "scroll")]
+        {
+            let Block {
+                hash,
+                parent_hash,
+                uncles_hash,
+                author,
+                state_root,
+                transactions_root,
+                receipts_root,
+                number,
+                gas_used,
+                gas_limit,
+                extra_data,
+                logs_bloom,
+                timestamp,
+                difficulty,
+                total_difficulty,
+                seal_fields,
+                uncles,
+                size,
+                mix_hash,
+                nonce,
+                base_fee_per_gas,
+                withdrawals_root,
+                withdrawals,
+                last_applied_l1_block,
+                l1_block_hashes,
+                other,
+                ..
+            } = self;
+            Block {
+                hash,
+                parent_hash,
+                uncles_hash,
+                author,
+                state_root,
+                transactions_root,
+                receipts_root,
+                number,
+                gas_used,
+                gas_limit,
+                extra_data,
+                logs_bloom,
+                timestamp,
+                difficulty,
+                total_difficulty,
+                seal_fields,
+                uncles,
+                size,
+                mix_hash,
+                nonce,
+                base_fee_per_gas,
+                withdrawals_root,
+                withdrawals,
+                transactions,
+                last_applied_l1_block,
+                l1_block_hashes,
                 other,
             }
         }
@@ -311,7 +383,7 @@ impl Block<TxHash> {
 
 impl From<Block<Transaction>> for Block<TxHash> {
     fn from(full: Block<Transaction>) -> Self {
-        #[cfg(not(feature = "celo"))]
+        #[cfg(not(any(feature = "celo", feature = "scroll")))]
         {
             let Block {
                 hash,
@@ -365,6 +437,68 @@ impl From<Block<Transaction>> for Block<TxHash> {
                 withdrawals_root,
                 withdrawals,
                 transactions: transactions.iter().map(|tx| tx.hash).collect(),
+                other,
+            }
+        }
+
+        #[cfg(feature = "scroll")]
+        {
+            let Block {
+                hash,
+                parent_hash,
+                uncles_hash,
+                author,
+                state_root,
+                transactions_root,
+                receipts_root,
+                number,
+                gas_used,
+                gas_limit,
+                extra_data,
+                logs_bloom,
+                timestamp,
+                difficulty,
+                total_difficulty,
+                seal_fields,
+                uncles,
+                transactions,
+                size,
+                mix_hash,
+                nonce,
+                base_fee_per_gas,
+                withdrawals_root,
+                withdrawals,
+                last_applied_l1_block,
+                l1_block_hashes,
+                other,
+            } = full;
+            Block {
+                hash,
+                parent_hash,
+                uncles_hash,
+                author,
+                state_root,
+                transactions_root,
+                receipts_root,
+                number,
+                gas_used,
+                gas_limit,
+                extra_data,
+                logs_bloom,
+                timestamp,
+                difficulty,
+                total_difficulty,
+                seal_fields,
+                uncles,
+                size,
+                mix_hash,
+                nonce,
+                base_fee_per_gas,
+                withdrawals_root,
+                withdrawals,
+                transactions: transactions.iter().map(|tx| tx.hash).collect(),
+                last_applied_l1_block,
+                l1_block_hashes,
                 other,
             }
         }
