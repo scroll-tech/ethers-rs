@@ -47,6 +47,9 @@ once_cell = { workspace = true, optional = true }
 unicode-xid = "0.2"
 strum = { version = "0.24", features = ["derive"] }
 num_enum = "0.6"
+rkyv = { workspace = true, optional = true}
+ethereum-types.workspace = true
+primitive-types.workspace = true
 
 # macros feature enabled dependencies
 cargo_metadata = { version = "0.15.4", optional = true }
@@ -66,7 +69,8 @@ celo = ["legacy"] # celo support extends the transaction format with extra field
 legacy = []
 macros = ["syn", "cargo_metadata", "once_cell"]
 optimism = []
-scroll = []
+rkyv = ["dep:rkyv"]
+scroll = ["rkyv"]
 
 # Deprecated
 eip712 = []

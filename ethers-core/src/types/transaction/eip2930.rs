@@ -73,6 +73,9 @@ impl TransactionRequest {
     FastRlpDecodable,
 )]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(feature = "rkyv", archive(compare(PartialEq)))]
+#[cfg_attr(feature = "rkyv", archive_attr(derive(Debug, Hash, PartialEq, Eq)))]
 pub struct AccessListItem {
     /// Accessed address
     pub address: Address,

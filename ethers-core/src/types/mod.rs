@@ -36,6 +36,8 @@ pub use i256::{ParseI256Error, Sign, I256};
 
 mod bytes;
 pub use self::bytes::{deserialize_bytes, serialize_bytes, Bytes, ParseBytesError};
+#[cfg(feature = "rkyv")]
+pub use self::bytes::ArchivedBytes;
 
 mod block;
 pub use block::{Block, BlockId, BlockNumber, TimeError};
