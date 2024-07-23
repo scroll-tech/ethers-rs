@@ -242,12 +242,16 @@ pub use rkyv_imp::ArchivedBytes;
 mod rkyv_imp {
     use std::cmp;
     use std::ops::Deref;
-    use rkyv::{Archive, Deserialize, Fallible, Serialize};
+    use rkyv::{Archive, CheckBytes, Deserialize, Fallible, Serialize};
+    use rkyv::bytecheck::Error;
     use rkyv::vec::{ArchivedVec, VecResolver};
     use rkyv::ser::{ScratchSpace, Serializer};
+    use rkyv::validation::ArchiveContext;
+    use rkyv::validation::owned::CheckOwnedPointerError;
     use crate::types::Bytes;
 
     #[derive(Debug, PartialEq, Ord, PartialOrd, Eq, Hash)]
+    #[repr(transparent)]
     pub struct ArchivedBytes(ArchivedVec<u8>);
 
     impl Deref for ArchivedBytes {
@@ -255,6 +259,20 @@ mod rkyv_imp {
 
         fn deref(&self) -> &[u8] {
             self.0.as_slice()
+        }
+    }
+
+    impl AsRef<[u8]> for ArchivedBytes {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_slice()
+        }
+    }
+
+    impl ToOwned for ArchivedBytes {
+        type Owned = Bytes;
+
+        fn to_owned(&self) -> Bytes {
+            Bytes::from(self.0.to_owned())
         }
     }
 
@@ -290,6 +308,25 @@ mod rkyv_imp {
     impl PartialOrd<Bytes> for ArchivedBytes {
         fn partial_cmp(&self, other: &Bytes) -> Option<cmp::Ordering> {
             self.0.as_slice().partial_cmp(other.as_ref())
+        }
+    }
+
+    impl<C> CheckBytes<C> for ArchivedBytes
+    where
+        C: ArchiveContext + ?Sized,
+        C::Error: Error,
+    {
+        type Error = CheckOwnedPointerError<[u8], C>;
+
+        #[inline]
+        unsafe fn check_bytes<'a>(
+            value: *const Self,
+            context: &mut C,
+        ) -> Result<&'a Self, Self::Error> {
+            ArchivedVec::check_bytes_with::<C, _>(
+                value as *const ArchivedVec<u8>, context, |v, c| {
+                <[u8]>::check_bytes(v, c).map(|_| ())
+            }).map(std::mem::transmute::<ArchivedVec<u8>, ArchivedBytes>)
         }
     }
 }

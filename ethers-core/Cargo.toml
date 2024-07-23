@@ -47,7 +47,7 @@ once_cell = { workspace = true, optional = true }
 unicode-xid = "0.2"
 strum = { version = "0.24", features = ["derive"] }
 num_enum = "0.6"
-rkyv = { workspace = true, optional = true}
+rkyv = { workspace = true, features = ["validation"], optional = true }
 ethereum-types.workspace = true
 primitive-types.workspace = true
 
