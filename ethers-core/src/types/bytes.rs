@@ -268,14 +268,6 @@ mod rkyv_imp {
         }
     }
 
-    impl ToOwned for ArchivedBytes {
-        type Owned = Bytes;
-
-        fn to_owned(&self) -> Bytes {
-            Bytes::from(self.0.to_owned())
-        }
-    }
-
     impl Archive for Bytes {
         type Archived = ArchivedBytes;
         type Resolver = VecResolver;
