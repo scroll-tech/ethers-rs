@@ -326,7 +326,11 @@ mod rkyv_imp {
             ArchivedVec::check_bytes_with::<C, _>(
                 value as *const ArchivedVec<u8>, context, |v, c| {
                 <[u8]>::check_bytes(v, c).map(|_| ())
-            }).map(std::mem::transmute::<ArchivedVec<u8>, ArchivedBytes>)
+            }).map(|a| {
+                unsafe {
+                    std::mem::transmute::<&ArchivedVec<u8>, &ArchivedBytes>(a)
+                }
+            })
         }
     }
 }
