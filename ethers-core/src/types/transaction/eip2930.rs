@@ -86,7 +86,11 @@ pub struct AccessListItem {
 #[cfg(feature = "rkyv")]
 impl PartialEq<AccessListItem> for ArchivedAccessListItem {
     fn eq(&self, other: &AccessListItem) -> bool {
-        self.address.as_ref() == &other.address && self.storage_keys.iter().zip(other.storage_keys.iter()).all(|(k1, k2)| k1.as_ref() == k2)
+        self.address.as_h160() == &other.address &&
+            self.storage_keys
+                .iter()
+                .zip(other.storage_keys.iter())
+                .all(|(k1, k2)| k1.as_h256() == k2)
     }
 }
 

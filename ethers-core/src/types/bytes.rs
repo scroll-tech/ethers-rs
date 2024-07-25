@@ -240,15 +240,15 @@ pub use rkyv_imp::ArchivedBytes;
 
 #[cfg(feature = "rkyv")]
 mod rkyv_imp {
-    use std::cmp;
-    use std::ops::Deref;
-    use rkyv::{Archive, CheckBytes, Deserialize, Fallible, Serialize};
-    use rkyv::bytecheck::Error;
-    use rkyv::vec::{ArchivedVec, VecResolver};
-    use rkyv::ser::{ScratchSpace, Serializer};
-    use rkyv::validation::ArchiveContext;
-    use rkyv::validation::owned::CheckOwnedPointerError;
     use crate::types::Bytes;
+    use rkyv::{
+        bytecheck::Error,
+        ser::{ScratchSpace, Serializer},
+        validation::{owned::CheckOwnedPointerError, ArchiveContext},
+        vec::{ArchivedVec, VecResolver},
+        Archive, CheckBytes, Deserialize, Fallible, Serialize,
+    };
+    use std::{cmp, ops::Deref};
 
     #[derive(Debug, PartialEq, Ord, PartialOrd, Eq, Hash)]
     #[repr(transparent)]
@@ -316,13 +316,11 @@ mod rkyv_imp {
             context: &mut C,
         ) -> Result<&'a Self, Self::Error> {
             ArchivedVec::check_bytes_with::<C, _>(
-                value as *const ArchivedVec<u8>, context, |v, c| {
-                <[u8]>::check_bytes(v, c).map(|_| ())
-            }).map(|a| {
-                unsafe {
-                    std::mem::transmute::<&ArchivedVec<u8>, &ArchivedBytes>(a)
-                }
-            })
+                value as *const ArchivedVec<u8>,
+                context,
+                |v, c| <[u8]>::check_bytes(v, c).map(|_| ()),
+            )
+            .map(|a| unsafe { std::mem::transmute::<&ArchivedVec<u8>, &ArchivedBytes>(a) })
         }
     }
 
