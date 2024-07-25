@@ -325,6 +325,19 @@ mod rkyv_imp {
             })
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_rkyv() {
+            let bytes = Bytes::from(vec![1, 2, 3, 4]);
+            let serialized = rkyv::to_bytes::<_, 20>(&bytes).unwrap();
+            let archived = rkyv::check_archived_root::<Bytes>(&serialized[..]).unwrap();
+            assert_eq!(archived, &bytes);
+        }
+    }
 }
 
 #[cfg(test)]
