@@ -73,11 +73,25 @@ impl TransactionRequest {
     FastRlpDecodable,
 )]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(feature = "rkyv", archive(check_bytes))]
+#[cfg_attr(feature = "rkyv", archive_attr(derive(Debug, Hash, PartialEq, Eq)))]
 pub struct AccessListItem {
     /// Accessed address
     pub address: Address,
     /// Accessed storage keys
     pub storage_keys: Vec<H256>,
+}
+
+#[cfg(feature = "rkyv")]
+impl PartialEq<AccessListItem> for ArchivedAccessListItem {
+    fn eq(&self, other: &AccessListItem) -> bool {
+        self.address.as_h160() == &other.address &&
+            self.storage_keys
+                .iter()
+                .zip(other.storage_keys.iter())
+                .all(|(k1, k2)| k1.as_h256() == k2)
+    }
 }
 
 /// An error involving an EIP2930 transaction request.

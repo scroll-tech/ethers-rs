@@ -150,7 +150,7 @@ where
             Ok(tx_hash) => Ok(tx_hash),
             Err(err) => {
                 let nonce = self.get_transaction_count(self.address, block).await?;
-                if nonce != self.nonce.load(Ordering::SeqCst).into() {
+                if nonce.as_u64() != self.nonce.load(Ordering::SeqCst) {
                     // try re-submitting the transaction with the correct nonce if there
                     // was a nonce mismatch
                     self.nonce.store(nonce.as_u64(), Ordering::SeqCst);

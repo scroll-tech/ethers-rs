@@ -235,6 +235,109 @@ where
     .map_err(|e| serde::de::Error::custom(e.to_string()))
 }
 
+#[cfg(feature = "rkyv")]
+pub use rkyv_imp::ArchivedBytes;
+
+#[cfg(feature = "rkyv")]
+mod rkyv_imp {
+    use crate::types::Bytes;
+    use rkyv::{
+        bytecheck::Error,
+        ser::{ScratchSpace, Serializer},
+        validation::{owned::CheckOwnedPointerError, ArchiveContext},
+        vec::{ArchivedVec, VecResolver},
+        Archive, CheckBytes, Deserialize, Fallible, Serialize,
+    };
+    use std::{cmp, ops::Deref};
+
+    #[derive(Debug, PartialEq, Ord, PartialOrd, Eq, Hash)]
+    #[repr(transparent)]
+    pub struct ArchivedBytes(ArchivedVec<u8>);
+
+    impl Deref for ArchivedBytes {
+        type Target = [u8];
+
+        fn deref(&self) -> &[u8] {
+            self.0.as_slice()
+        }
+    }
+
+    impl AsRef<[u8]> for ArchivedBytes {
+        fn as_ref(&self) -> &[u8] {
+            self.0.as_slice()
+        }
+    }
+
+    impl Archive for Bytes {
+        type Archived = ArchivedBytes;
+        type Resolver = VecResolver;
+
+        unsafe fn resolve(&self, pos: usize, resolver: Self::Resolver, out: *mut Self::Archived) {
+            ArchivedVec::resolve_from_slice(self.0.as_ref(), pos, resolver, &mut (*out).0);
+        }
+    }
+
+    impl<S: ScratchSpace + Serializer + ?Sized> Serialize<S> for Bytes {
+        #[inline]
+        fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, S::Error> {
+            ArchivedVec::serialize_from_slice(self.0.as_ref(), serializer)
+        }
+    }
+
+    impl<D: Fallible + ?Sized> Deserialize<Bytes, D> for ArchivedBytes {
+        fn deserialize(&self, deserializer: &mut D) -> Result<Bytes, D::Error> {
+            let v: Vec<u8> = self.0.deserialize(deserializer)?;
+            Ok(Bytes::from(v))
+        }
+    }
+
+    impl PartialEq<Bytes> for ArchivedBytes {
+        fn eq(&self, other: &Bytes) -> bool {
+            self.0.as_slice() == other.as_ref()
+        }
+    }
+
+    impl PartialOrd<Bytes> for ArchivedBytes {
+        fn partial_cmp(&self, other: &Bytes) -> Option<cmp::Ordering> {
+            self.0.as_slice().partial_cmp(other.as_ref())
+        }
+    }
+
+    impl<C> CheckBytes<C> for ArchivedBytes
+    where
+        C: ArchiveContext + ?Sized,
+        C::Error: Error,
+    {
+        type Error = CheckOwnedPointerError<[u8], C>;
+
+        #[inline]
+        unsafe fn check_bytes<'a>(
+            value: *const Self,
+            context: &mut C,
+        ) -> Result<&'a Self, Self::Error> {
+            ArchivedVec::check_bytes_with::<C, _>(
+                value as *const ArchivedVec<u8>,
+                context,
+                |v, c| <[u8]>::check_bytes(v, c).map(|_| ()),
+            )
+            .map(|a| unsafe { std::mem::transmute::<&ArchivedVec<u8>, &ArchivedBytes>(a) })
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_rkyv() {
+            let bytes = Bytes::from(vec![1, 2, 3, 4]);
+            let serialized = rkyv::to_bytes::<_, 20>(&bytes).unwrap();
+            let archived = rkyv::check_archived_root::<Bytes>(&serialized[..]).unwrap();
+            assert_eq!(archived, &bytes);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,11 +4,18 @@ pub type Selector = [u8; 4];
 
 // Re-export common ethereum datatypes with more specific names
 
+#[cfg(feature = "rkyv")]
+pub use ethabi::ethereum_types::ArchivedH256 as ArchivedTxHash;
 /// A transaction Hash
 pub use ethabi::ethereum_types::H256 as TxHash;
 
 pub use ethabi::ethereum_types::{
     Address, BigEndianHash, Bloom, H128, H160, H256, H32, H512, H64, U128, U256, U512, U64,
+};
+#[cfg(feature = "rkyv")]
+pub use ethabi::ethereum_types::{
+    ArchivedAddress, ArchivedH128, ArchivedH160, ArchivedH256, ArchivedH32, ArchivedH512,
+    ArchivedH64, ArchivedU128, ArchivedU256, ArchivedU512, ArchivedU64,
 };
 
 pub mod transaction;
@@ -35,6 +42,8 @@ mod i256;
 pub use i256::{ParseI256Error, Sign, I256};
 
 mod bytes;
+#[cfg(feature = "rkyv")]
+pub use self::bytes::ArchivedBytes;
 pub use self::bytes::{deserialize_bytes, serialize_bytes, Bytes, ParseBytesError};
 
 mod block;

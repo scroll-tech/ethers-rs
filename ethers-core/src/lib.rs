@@ -2,6 +2,7 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 #![cfg_attr(not(target_arch = "wasm32"), deny(unused_crate_dependencies))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+extern crate core;
 
 pub mod types;
 
@@ -18,3 +19,6 @@ pub use rand;
 
 // re-export k256
 pub use k256;
+
+use ethereum_types as _;
+use primitive_types as _;
